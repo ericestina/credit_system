@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/static/base.css">
+<script defer src="/static/nav.js"></script>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Credit System — Policy Builder</title>
+</head>
+<body>
+<header class="site-header">
+  <div class="navbar">
+    <a class="brand" href="/">Credit System</a>
+    <nav class="navlinks" id="main-nav">
+      <a href="/" data-nav="home">Home</a>
+      <a href="/policy" data-nav="policy" class="nav-soft">Manage Policies</a>
+      <a href="/apply" data-nav="apply" class="nav-cta">Apply for Credit</a>
+      <a href="/model" data-nav="model" class="nav-soft">Model</a>
+    </nav>
+    <button class="nav-toggle" aria-label="Open menu" aria-expanded="false">☰</button>
+  </div>
+</header>
+
+
+<main>
+  <!-- META -->
+  <section class="card grid three">
+    <div>
+      <label>Policy name</label>
+      <input id="p_name" placeholder="policy_v1" value="policy_v1"/>
+    </div>
+    <div>
+      <label>Priority</label>
+      <input id="p_priority" type="number" value="10"/>
+    </div>
+    <div>
+      <label>Active</label>
+      <select id="p_active"><option value="true" selected>true</option><option value="false">false</option></select>
+    </div>
+  </section>
+
+  <!-- RULES -->
+  <section class="card">
+    <div class="toolbar">
+      <button class="btn-acc" id="btn_add_rule">+ Add rule</button>
+      <button class="btn-ghost" id="btn_expand_all">Expand all</button>
+      <button class="btn-ghost" id="btn_collapse_all">Collapse all</button>
+      <span class="right badge">Types: eligibility · affordability · risk_threshold · pricing · override</span>
+    </div>
+    <div id="rules"></div>
+  </section>
+
+  <!-- ACTIONS -->
+  <section class="card">
+    <div class="toolbar">
+      <button class="btn-acc" id="btn_save">Save policy</button>
+      <button class="btn" id="btn_activate">Activate policy</button>
+      <button class="btn" id="btn_load">Load active</button>
+      <button class="btn" id="btn_preview_json">Preview JSON</button>
+      <span class="right muted">POST /api/policies · POST /api/policies/activate/{name} · GET /api/policies/active</span>
+    </div>
+    <div id="msg" style="margin-top:10px"></div>
+    <details style="margin-top:10px">
+      <summary>JSON Payload</summary>
+      <pre class="code" id="json_box">{}</pre>
+    </details>
+  </section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s); const $$=s=>Array.from(document.querySelectorAll(s));
+const S={catalog:[]};
+
+function toast(t,cls="ok"){ $("#msg").innerHTML=`<span class="pill ${cls}">${t}</span>`; setTimeout(()=>$("#msg").innerHTML="",4500); }
+
+async function fetchCatalog(){
+  try{
+    const r=await fetch("/api/rules"); const j=await r.json(); S.catalog=j;
+    $("#status").textContent="Rules loaded";
+    $("#status").className="pill ok";
+  }catch{ $("#status").textContent="Failed to load rules"; $("#status").className="pill err"; }
+}
+
+function newRuleBlock(){
+  const id = "R"+Math.random().toString(36).slice(2,7).toUpperCase();
+  const el = document.createElement("details");
+  el.className="rule"; el.open=true;
+  el.innerHTML=`
+    <summary><strong id="sum">${id}</strong> <span class="badge" id="typeBadge">eligibility</span></summary>
+    <div class="grid two" style="margin-top:10px">
+      <div>
+        <label>Rule ID</label>
+        <input class="r_id" value="${id}"/>
+      </div>
+      <div>
+        <label>Type</label>
+        <select class="r_type">
+          <option>eligibility</option>
+          <option>affordability</option>
+          <option>risk_threshold</option>
+          <option>pricing</option>
+          <option>override</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:8px">
+      <label>Description</label>
+      <input class="r_desc" placeholder="Describe what this rule does"/>
+    </div>
+
+    <div class="grid" style="margin-top:8px">
+      <div class="toolbar">
+        <strong>WHEN</strong>
+        <button class="btn" data-when="all">+ Add ALL</button>
+        <button class="btn" data-when="any">+ Add ANY</button>
+        <button class="btn" data-when="none">+ Add NONE</button>
+        <span class="right muted">All/Any/None clauses are AND/OR/NOT groups</span>
+      </div>
+      <div class="when all"></div>
+      <div class="when any"></div>
+      <div class="when none"></div>
+    </div>
+
+    <div class="grid" style="margin-top:8px">
+      <div class="toolbar">
+        <strong>THEN / ELSE actions</strong>
+        <button class="btn" data-act="then">+ Add THEN</button>
+        <button class="btn" data-act="else">+ Add ELSE</button>
+        <span class="right muted">Actions: allow · reject(reason) · set_limit_max(mult_income) · set_apr(value) · set_apr_tier(table)</span>
+      </div>
+      <div class="acts then"></div>
+      <div class="acts else"></div>
+    </div>
+
+    <div class="row-actions" style="margin-top:10px">
+      <button class="btn-warn btn-del">Remove rule</button>
+    </div>
+  `;
+  wireRule(el);
+  return el;
+}
+
+function wireRule(el){
+  const idInput = el.querySelector(".r_id");
+  const typeSel = el.querySelector(".r_type");
+  const sum = el.querySelector("#sum");
+  const badge = el.querySelector("#typeBadge");
+
+  idInput.addEventListener("input", ()=> sum.textContent=idInput.value||"(no id)");
+  typeSel.addEventListener("change", ()=> badge.textContent=typeSel.value);
+
+  // WHEN buttons
+  el.querySelectorAll("button[data-when]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const grp = btn.getAttribute("data-when");
+      addWhenRow(el.querySelector(`.when.${grp}`));
+    });
+  });
+  // ACTIONS buttons
+  el.querySelectorAll("button[data-act]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const grp = btn.getAttribute("data-act");
+      addActionRow(el.querySelector(`.acts.${grp}`));
+    });
+  });
+  // remove rule
+  el.querySelector(".btn-del").addEventListener("click", ()=> el.remove());
+}
+
+function addWhenRow(container){
+  const row=document.createElement("div");
+  row.className="row";
+  row.innerHTML=`
+    <div>
+      <label>Field</label>
+      <select class="w_field">${S.catalog.map(f=>`<option value="${f.id}">${f.label}</option>`).join("")}
+        <option value="prob_default">Model: prob_default</option>
+        <option value="prob_approve">Model: prob_approve</option>
+      </select>
+    </div>
+    <div>
+      <label>Operator</label>
+      <select class="w_op">
+        <option>gte</option><option>lte</option><option>gt</option><option>lt</option>
+        <option>eq</option><option>ne</option><option>between</option>
+        <option>in</option><option>not_in</option><option>exists</option>
+      </select>
+    </div>
+    <div>
+      <label>Value</label>
+      <input class="w_val" placeholder="e.g. 18 or 0.55 or [a,b]"/>
+    </div>
+    <div>
+      <label class="muted"> </label>
+      <div class="row-actions"><button class="btn-warn w_rm">Remove</button></div>
+    </div>
+  `;
+  row.querySelector(".w_rm").addEventListener("click", ()=>row.remove());
+  container.appendChild(row);
+}
+
+function addActionRow(container){
+  const row=document.createElement("div");
+  row.className="row";
+  row.innerHTML=`
+    <div>
+      <label>Action</label>
+      <select class="a_act">
+        <option value="allow">allow</option>
+        <option value="reject">reject</option>
+        <option value="set_limit_max">set_limit_max</option>
+        <option value="set_apr">set_apr</option>
+        <option value="set_apr_tier">set_apr_tier</option>
+        <option value="add_reason">add_reason</option>
+      </select>
+    </div>
+    <div>
+      <label>Param A</label>
+      <input class="a_p1" placeholder="reason | mult_income | apr | table JSON"/>
+    </div>
+    <div>
+      <label>Param B</label>
+      <input class="a_p2" placeholder="(optional)"/>
+    </div>
+    <div class="row-actions">
+      <label class="muted"> </label>
+      <button class="btn-warn a_rm">Remove</button>
+    </div>
+  `;
+  row.querySelector(".a_rm").addEventListener("click", ()=>row.remove());
+  container.appendChild(row);
+}
+
+function collectPolicy(){
+  const name = $("#p_name").value.trim() || "policy_v1";
+  const priority = Number($("#p_priority").value||10);
+  const active = $("#p_active").value==="true";
+  const rules = [];
+
+  $$("#rules .rule").forEach(rule=>{
+    const id = rule.querySelector(".r_id").value.trim() || "RULE";
+    const type = rule.querySelector(".r_type").value;
+    const desc = rule.querySelector(".r_desc").value.trim();
+
+    const when = {};
+    rule.querySelectorAll(".when").forEach(group=>{
+      const key = group.classList.contains("all")?"all":group.classList.contains("any")?"any":group.classList.contains("none")?"none":null;
+      const clauses=[];
+      group.querySelectorAll(".row").forEach(r=>{
+        const f=r.querySelector(".w_field")?.value;
+        const op=r.querySelector(".w_op")?.value;
+        const raw=r.querySelector(".w_val")?.value.trim();
+        if(!f||!op) return;
+        let value=null;
+        if(raw){
+          try{ value=JSON.parse(raw); }catch{ value=isNaN(Number(raw))? raw : Number(raw); }
+        }
+        clauses.push({field:f, op, value});
+      });
+      if(clauses.length) when[key]=clauses;
+    });
+
+    function collectActs(container){
+      const acts=[];
+      container.querySelectorAll(".row").forEach(r=>{
+        const a=r.querySelector(".a_act").value;
+        const p1=r.querySelector(".a_p1").value.trim();
+        const p2=r.querySelector(".a_p2").value.trim();
+        if(a==="reject"){
+          acts.push({action:"reject", reason:p1||id});
+        }else if(a==="allow"){
+          acts.push({action:"allow"});
+        }else if(a==="set_limit_max"){
+          acts.push({action:"set_limit_max", value:{mult_income: Number(p1||0)}});
+        }else if(a==="set_apr"){
+          acts.push({action:"set_apr", value:Number(p1||0)});
+        }else if(a==="set_apr_tier"){
+          // p1 deve ser algo como: [{"if":{"prob_default_lte":0.15},"apr":0.18},{"else":true,"apr":0.45}]
+          let table=[]; try{ table=JSON.parse(p1||"[]"); }catch{}
+          acts.push({action:"set_apr_tier", table});
+        }else if(a==="add_reason"){
+          acts.push({action:"add_reason", reason:p1||id});
+        }
+      });
+      return acts;
+    }
+
+    const thenActs = collectActs(rule.querySelector(".acts.then"));
+    const elseActs = collectActs(rule.querySelector(".acts.else"));
+
+    const entry = {id, type, description:desc, when, then:thenActs};
+    if(elseActs.length) entry["else"] = elseActs;
+    rules.push(entry);
+  });
+
+  return {name, priority, active, rules};
+}
+
+const API = {
+  async savePolicy(p){
+    const r=await fetch("/api/policies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+    if(!r.ok) throw new Error(await r.text()); return r.json();
+  },
+  async activate(name){
+    const r=await fetch(`/api/policies/activate/${encodeURIComponent(name)}`,{method:"POST"});
+    if(!r.ok) throw new Error(await r.text()); return r.json();
+  },
+  async loadActive(){
+    const r=await fetch("/api/policies/active"); if(!r.ok) throw new Error(await r.text()); return r.json();
+  }
+};
+
+$("#btn_add_rule").addEventListener("click",()=> $("#rules").appendChild(newRuleBlock()));
+$("#btn_expand_all").addEventListener("click",()=> $$("#rules .rule").forEach(d=>d.open=true));
+$("#btn_collapse_all").addEventListener("click",()=> $$("#rules .rule").forEach(d=>d.open=false));
+
+$("#btn_preview_json").addEventListener("click",()=>{
+  const p=collectPolicy();
+  $("#json_box").textContent=JSON.stringify(p,null,2);
+  toast("Preview updated","ok");
+});
+
+$("#btn_save").addEventListener("click", async ()=>{
+  try{
+    const p=collectPolicy();
+    $("#json_box").textContent=JSON.stringify(p,null,2);
+    await API.savePolicy(p);
+    toast("Policy saved","ok");
+  }catch(e){ console.error(e); toast("Failed to save","err"); }
+});
+
+$("#btn_activate").addEventListener("click", async ()=>{
+  try{
+    const name=$("#p_name").value.trim(); if(!name) return alert("Name required");
+    await API.activate(name); toast(`Policy '${name}' activated`,"ok");
+  }catch(e){ console.error(e); toast("Failed to activate","err"); }
+});
+
+$("#btn_load").addEventListener("click", async ()=>{
+  try{
+    const p=await API.loadActive(); if(!p){ toast("No active policy","warn"); return; }
+    // reset UI
+    $("#p_name").value=p.name||"policy_v1";
+    $("#p_priority").value=p.priority??10;
+    $("#p_active").value=String(p.active??true);
+    $("#rules").innerHTML="";
+    (p.rules||[]).forEach(rule=>{
+      const el=newRuleBlock();
+      el.querySelector(".r_id").value=rule.id||"RULE";
+      el.querySelector(".r_type").value=rule.type||"eligibility";
+      el.querySelector(".r_desc").value=rule.description||"";
+      // when
+      for(const key of ["all","any","none"]){
+        const grp=el.querySelector(`.when.${key}`);
+        (rule.when?.[key]||[]).forEach(c=>{
+          addWhenRow(grp);
+          const last=grp.lastElementChild;
+          last.querySelector(".w_field").value=c.field||"age";
+          last.querySelector(".w_op").value=c.op||"gte";
+          last.querySelector(".w_val").value=(c.value!=null?JSON.stringify(c.value):"");
+        });
+      }
+      // acts
+      function loadActs(container, arr){
+        (arr||[]).forEach(a=>{
+          addActionRow(container);
+          const row=container.lastElementChild;
+          row.querySelector(".a_act").value=a.action;
+          if(a.action==="reject") row.querySelector(".a_p1").value=a.reason||"";
+          if(a.action==="set_limit_max") row.querySelector(".a_p1").value=a.value?.mult_income??"";
+          if(a.action==="set_apr") row.querySelector(".a_p1").value=a.value??"";
+          if(a.action==="set_apr_tier") row.querySelector(".a_p1").value=JSON.stringify(a.table||[]);
+          if(a.action==="add_reason") row.querySelector(".a_p1").value=a.reason||"";
+        });
+      }
+      loadActs(el.querySelector(".acts.then"), rule.then||[]);
+      loadActs(el.querySelector(".acts.else"), rule.else||rule.else_||[]);
+      $("#rules").appendChild(el);
+    });
+    toast("Active policy loaded","ok");
+  }catch(e){ console.error(e); toast("Failed to load","err"); }
+});
+
+(async function init(){
+  await fetchCatalog();
+  // seed a sample rule to start
+  const r=newRuleBlock();
+  // seed: age >= 18 -> allow ; else reject
+  addWhenRow(r.querySelector(".when.all"));
+  const c=r.querySelector(".when.all .row:last-child");
+  c.querySelector(".w_field").value="age"; c.querySelector(".w_op").value="gte"; c.querySelector(".w_val").value="18";
+  addActionRow(r.querySelector(".acts.then")); r.querySelector(".acts.then .a_act").value="allow";
+  addActionRow(r.querySelector(".acts.else")); const e=r.querySelector(".acts.else .row:last-child");
+  e.querySelector(".a_act").value="reject"; e.querySelector(".a_p1").value="AGE_MIN";
+  $("#rules").appendChild(r);
+})();
+</script>
+</body>
+</html>

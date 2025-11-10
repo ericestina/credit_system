@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/static/base.css">
+<script defer src="/static/nav.js"></script>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Credit System — Model</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/base.css">
+  <script defer src="/static/nav.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="navbar">
+    <a class="brand" href="/">Credit System</a>
+    <nav class="navlinks" id="main-nav">
+      <a href="/" data-nav="home">Home</a>
+      <a href="/policy" data-nav="policy" class="nav-soft">Manage Policies</a>
+      <a href="/apply" data-nav="apply" class="nav-cta">Apply for Credit</a>
+      <a href="/model" data-nav="model" class="nav-soft">Model</a>
+    </nav>
+    <button class="nav-toggle" aria-label="Open menu" aria-expanded="false">☰</button>
+  </div>
+</header>
+
+
+<div class="container">
+  <div class="card">
+    <h1>Upload Logistic Regression</h1>
+    <p class="muted">Preencha os coeficientes e publique uma versão. Envia para <span class="pill">POST /api/models/logreg</span> e ative com <span class="pill">POST /api/models/activate/&lt;name&gt;</span>.</p>
+
+    <div class="grid g2">
+      <div>
+        <label>Model name</label>
+        <input id="m-name" placeholder="logreg_v1" />
+      </div>
+      <div>
+        <label>Intercept</label>
+        <input id="m-intercept" type="number" step="any" placeholder="-2.135" />
+      </div>
+    </div>
+
+    <h2>Features (name & coef)</h2>
+    <table class="table" id="feat-table">
+      <thead><tr><th>Feature name</th><th style="width:220px">Coef</th><th style="width:120px"></th></tr></thead>
+      <tbody id="feat-body"></tbody>
+    </table>
+
+    <div class="row" style="margin:8px 0 16px">
+      <button class="btn secondary" id="btn-add-feat">+ Add feature</button>
+      <span class="muted">Ex.: <code>age</code> = -0.02, <code>income</code> = 0.0008</span>
+    </div>
+
+    <div class="grid g2">
+      <div>
+        <label>Positive class label</label>
+        <input id="m-pos" value="approve" />
+      </div>
+      <div>
+        <label>Approval threshold (0..1)</label>
+        <input id="m-th" type="number" step="any" value="0.5" />
+      </div>
+    </div>
+
+    <h2>Imputation (opcional)</h2>
+    <textarea id="m-imputation" rows="4" placeholder='{"age":30,"income":1500,"country":"IE"}'></textarea>
+
+    <h2>Transform (opcional)</h2>
+    <textarea id="m-transform" rows="3" placeholder='{"standardize":["age","income"]}'></textarea>
+
+    <h2>Metadata (opcional)</h2>
+    <textarea id="m-metadata" rows="3" placeholder='{"notes":"first cut"}'></textarea>
+
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="btn-upload">Upload model</button>
+      <button class="btn secondary" id="btn-activate">Activate</button>
+      <button class="btn secondary" id="btn-get-active">Get active</button>
+    </div>
+    <div id="m-msg" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Modelo ativo</h2>
+    <pre id="active-json" class="muted" style="white-space:pre-wrap"></pre>
+  </div>
+</div>
+
+<script src="/static/model.js"></script>
+</body>
+</html>

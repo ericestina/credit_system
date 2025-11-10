@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Credit System — Decisioning Platform</title>
+  <link rel="stylesheet" href="/static/base.css">
+  <script defer src="/static/nav.js"></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="navbar">
+    <a class="brand" href="/">Credit System</a>
+    <nav class="navlinks" id="main-nav">
+      <a href="/" data-nav="home">Home</a>
+      <a href="/policy" data-nav="policy" class="nav-soft">Manage Policies</a>
+      <a href="/model"  data-nav="model"  class="nav-soft">Model</a>
+      <a href="/apply"  data-nav="apply"  class="nav-cta">Apply for Credit</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- HERO comercial -->
+  <section class="card" style="padding:28px">
+    <div class="grid two" style="align-items:center">
+      <div>
+        <h1 style="margin-bottom:8px">Approve smarter. Ship policies faster.</h1>
+        <p class="lead">
+          A single workspace to <b>design policies</b>, <b>upload logistic models</b> and
+          <b>simulate applications</b> — with auditor-friendly logs and instant activation.
+        </p>
+
+        <div class="cta-grid" style="margin-top:14px">
+          <a class="cta" href="/apply"><span class="icon">🧾</span>
+            <div><b>Run an Application</b><br/><small>Test your flow end-to-end</small></div>
+          </a>
+          <a class="cta" href="/policy"><span class="icon">⚖️</span>
+            <div><b>Open Policy Builder</b><br/><small>Eligibility · Risk · Pricing</small></div>
+          </a>
+          <a class="cta" href="/model"><span class="icon">📊</span>
+            <div><b>Upload Model</b><br/><small>Logistic regression with threshold</small></div>
+          </a>
+        </div>
+
+        <!-- métricas rápidas -->
+        <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px">
+          <div class="pill">⏱️ <b>Go-live in minutes</b></div>
+          <div class="pill">🧩 <b>Dynamic Rules</b></div>
+          <div class="pill">📝 <b>Full Decision Logs</b></div>
+        </div>
+      </div>
+
+      <!-- config ativa -->
+      <div class="card">
+        <h2 style="margin-bottom:8px">Active configuration</h2>
+        <table>
+          <tr><th>Policy</th><td id="pol">—</td></tr>
+          <tr><th>Model</th><td id="mdl">—</td></tr>
+          <tr><th>Threshold</th><td id="thr">—</td></tr>
+        </table>
+        <p class="muted" style="margin-top:8px">
+          Changes made in Policy or Model Builder are reflected here immediately.
+        </p>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn" href="/policy">Manage Policies</a>
+          <a class="btn" href="/model">Manage Model</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- benefícios / features -->
+  <section class="grid two">
+    <div class="card">
+      <h2>Why Credit System?</h2>
+      <ul style="margin-top:10px">
+        <li><b>No code policy builder</b> — groups (ALL/ANY/NONE) e ações (allow/reject/pricing).</li>
+        <li><b>Model upload</b> — intercepto, coeficientes, imputação e threshold configuráveis.</li>
+        <li><b>Auditable</b> — guarda <i>reasons</i>, probabilidades e parâmetros utilizados.</li>
+        <li><b>FastAPI + SQLite</b> — simples de rodar localmente ou em nuvem.</li>
+      </ul>
+      <div style="margin-top:12px">
+        <a class="btn" href="/policy">Build a Policy</a>
+        <a class="btn" href="/model" style="margin-left:8px">Upload Model</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Compliance-ready</h2>
+      <p class="muted" style="margin:8px 0 12px">
+        Explainable decisions with human-readable rules and model scores.
+      </p>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+        <div class="pill">🔍 Audit Trail</div>
+        <div class="pill">🧪 Sandbox</div>
+        <div class="pill">🛡️ Policy Versioning</div>
+        <div class="pill">📈 Score Thresholding</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- decisões recentes -->
+  <section class="card">
+    <div style="display:flex;gap:10px;align-items:center;justify-content:space-between">
+      <h2>Recent decisions</h2>
+      <button class="btn" id="btn_refresh">Refresh</button>
+    </div>
+    <div style="overflow:auto;margin-top:8px">
+      <table id="hist">
+        <thead>
+          <tr>
+            <th>ID</th><th>When</th><th>Name</th><th>Age</th>
+            <th>Income</th><th>Country</th><th>Decision</th><th>Score</th><th>Reasons</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="9" class="muted">No data yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>© Credit System — Decisioning made simple</footer>
+
+<script>
+  const $ = s => document.querySelector(s);
+
+  async function loadActive(){
+    // endpoints esperados no backend:
+    // GET /api/policies/active  -> {name, priority, active, ...}
+    // GET /api/models/active    -> {name, threshold, ...}
+    try{
+      const pr = await fetch('/api/policies/active');
+      if(pr.ok){
+        const pj = await pr.json();
+        $('#pol').textContent = pj?.name ?? '—';
+      }
+    }catch{}
+
+    try{
+      const mr = await fetch('/api/models/active');
+      if(mr.ok){
+        const mj = await mr.json();
+        $('#mdl').textContent = mj?.name ?? '—';
+        $('#thr').textContent = (mj?.threshold ?? '') === '' ? '—' : String(mj.threshold);
+      }
+    }catch{}
+  }
+
+  async function loadRecent(){
+    // endpoint sugerido: GET /api/decisions/recent?limit=20
+    try{
+      const r = await fetch('/api/decisions/recent?limit=20');
+      if(!r.ok) return;
+      const rows = await r.json(); // [{id, created_at, name, age, income, country, decision, score_prob_approve, reasons}]
+      const tb = $('#hist tbody');
+      tb.innerHTML = '';
+      if(!rows || !rows.length){
+        tb.innerHTML = '<tr><td colspan="9" class="muted">No data yet.</td></tr>';
+        return;
+      }
+      for(const d of rows){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${d.id ?? ''}</td>
+          <td>${d.created_at ?? ''}</td>
+          <td>${d.name ?? ''}</td>
+          <td>${d.age ?? ''}</td>
+          <td>${d.income ?? ''}</td>
+          <td>${d.country ?? ''}</td>
+          <td>${d.decision ?? ''}</td>
+          <td>${(d.score_prob_approve ?? d.prob_approve ?? '').toString().slice(0,6)}</td>
+          <td><span class="muted">${Array.isArray(d.reasons)? d.reasons.join(', '): (d.reasons||'')}</span></td>
+        `;
+        tb.appendChild(tr);
+      }
+    }catch{}
+  }
+
+  document.getElementById('btn_refresh')?.addEventListener('click', loadRecent);
+
+  (async function init(){
+    await loadActive();
+    await loadRecent();
+  })();
+</script>
+</body>
+</html>
